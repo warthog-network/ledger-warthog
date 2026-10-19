@@ -14,6 +14,7 @@ snapshots-tmp/
 
 # Python
 *.pyc[cod]
+.DS_Store
 *.egg
 __pycache__/
 *.egg-info/
