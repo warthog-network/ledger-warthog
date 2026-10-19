@@ -1,25 +1,16 @@
-# Compilation files of the application
-build/
+target
+app.json
+app_nanos.json
+app_nanosplus.json
+app_nanox.json
+app_stax.json
+app_flex.json
 
-# Legacy compilation output
-bin/
-debug/
-
-# Nano NBGL reversed icon for Home Screen
-glyphs/home_boilerplate_14px.gif
+# Automatic generated NBGL glyphs
+glyphs/home_nano_nbgl.png
 
 # Temporary directory with snapshots taken during test runs
 snapshots-tmp/
-
-# Unit tests and code coverage
-unit-tests/build/
-unit-tests/coverage/
-unit-tests/coverage.info
-
-# Fuzzing
-fuzzing/build/
-fuzzing/corpus/
-fuzzing/out/
 
 # Python
 *.pyc[cod]
@@ -29,12 +20,14 @@ __pycache__/
 .eggs/
 .python-version
 
-# Doxygen
-doc/html
-doc/latex
-
+# Related to the Ledger VSCode extension
 # Virtual env for sideload (macOS and Windows)
 ledger/
+# Build directory
+build/
+# Leftover C-app outputs from the 0.2.0 tree
+/bin/
+/debug/
 
 # Helper script git clone
 tests/swap/.test_dependencies/app-exchange/

@@ -4,7 +4,6 @@ from enum import IntEnum
 
 from ragger.backend.interface import RAPDU, BackendInterface
 from ragger.bip import pack_derivation_path
-from ragger.error import StatusWords
 
 MAX_APDU_LEN: int = 255
 
@@ -34,15 +33,25 @@ class InsType(IntEnum):
     SIGN_TX = 0x06
 
 
-# Custom error codes specific to Boilerplate app
-custom_errors = {"SW_INVALID_DYNAMIC_TOKEN": 0xB009, "SW_SWAP_FAIL": 0xC000}
-
-# Build the combined dictionary first
-_errors_dict = {m.name: m.value for m in StatusWords}
-_errors_dict.update(custom_errors)
-
-# Create the Errors enum
-Errors = IntEnum("Errors", _errors_dict)  # type: ignore[misc]
+class Errors(IntEnum):
+    SW_DENY = 0x6985
+    SW_WRONG_P1P2 = 0x6A86
+    SW_INS_NOT_SUPPORTED = 0x6D00
+    SW_CLA_NOT_SUPPORTED = 0x6E00
+    SW_WRONG_APDU_LENGTH = 0x6E03
+    SW_WRONG_RESPONSE_LENGTH = 0xB000
+    SW_DISPLAY_BIP32_PATH_FAIL = 0xB001
+    SW_DISPLAY_ADDRESS_FAIL = 0xB002
+    SW_DISPLAY_AMOUNT_FAIL = 0xB003
+    SW_WRONG_TX_LENGTH = 0xB004
+    SW_TX_PARSING_FAIL = 0xB005
+    SW_TX_HASH_FAIL = 0xB006
+    SW_BAD_STATE = 0xB007
+    SW_SIGNATURE_FAIL = 0xB008
+    SW_SWAP_FAIL = 0xC000
+    SW_INCORRECT_DATA = 0x6A80
+    SW_WRONG_DATA_LENGTH = 0x6A87
+    SW_SECURITY_ISSUE = 0x6600
 
 
 def split_message(message: bytes, max_size: int) -> list[bytes]:
@@ -89,11 +98,10 @@ class BoilerplateCommandSender:
             yield response
 
     @contextmanager
-    def _sign_transaction(self, ins: InsType, path: str, transaction: bytes) -> Generator[None, None, None]:
-        """Send a chunked SIGN_TX. The first APDU is the path. The rest is the body."""
+    def sign_tx(self, path: str, transaction: bytes) -> Generator[None, None, None]:
         self.backend.exchange(
             cla=CLA,
-            ins=ins,
+            ins=InsType.SIGN_TX,
             p1=P1.P1_START,
             p2=P2.P2_MORE,
             data=pack_derivation_path(path),
@@ -102,20 +110,19 @@ class BoilerplateCommandSender:
         idx: int = P1.P1_START + 1
 
         for msg in messages[:-1]:
-            self.backend.exchange(cla=CLA, ins=ins, p1=idx, p2=P2.P2_MORE, data=msg)
+            self.backend.exchange(cla=CLA, ins=InsType.SIGN_TX, p1=idx, p2=P2.P2_MORE, data=msg)
             idx += 1
 
-        with self.backend.exchange_async(cla=CLA, ins=ins, p1=idx, p2=P2.P2_LAST, data=messages[-1]) as response:
-            yield response
-
-    @contextmanager
-    def sign_tx(self, path: str, transaction: bytes) -> Generator[None, None, None]:
-        with self._sign_transaction(InsType.SIGN_TX, path, transaction) as response:
+        with self.backend.exchange_async(cla=CLA, ins=InsType.SIGN_TX, p1=idx, p2=P2.P2_LAST, data=messages[-1]) as response:
             yield response
 
     def get_async_response(self) -> RAPDU | None:
         return self.backend.last_async_response
 
+    # Synchronous versions of sign_tx and sign_token_tx
+    # These functions wait for the response after sending the transaction. They are particularly
+    # useful for tests that do not require user interaction (e.g., when the transaction has already
+    # been approved in the SWAP flow)
     def sign_tx_sync(self, path: str, transaction: bytes) -> RAPDU | None:
         with self.sign_tx(path, transaction):
             pass

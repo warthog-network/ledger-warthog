@@ -47,6 +47,13 @@ def read(buf: BytesIO, size: int) -> bytes:
     return b
 
 
+def parse_hex_address(address: str | bytes) -> bytes:
+    """Convert a hex string or bytes to bytes, stripping a 0x prefix."""
+    if isinstance(address, str):
+        return bytes.fromhex(address[2:] if address.startswith("0x") else address)
+    return address
+
+
 def read_uint(buf: BytesIO, bit_len: int, byteorder: Literal["big", "little"] = "little") -> int:
     size: int = bit_len // 8
     b: bytes = buf.read(size)
@@ -55,10 +62,3 @@ def read_uint(buf: BytesIO, bit_len: int, byteorder: Literal["big", "little"] = 
         raise ValueError(f"Can't read u{bit_len} in buffer!")
 
     return int.from_bytes(b, byteorder)
-
-
-def parse_hex_address(address: str | bytes) -> bytes:
-    """Convert hex string or bytes to bytes, stripping 0x prefix if present."""
-    if isinstance(address, str):
-        return bytes.fromhex(address[2:] if address.startswith("0x") else address)
-    return address

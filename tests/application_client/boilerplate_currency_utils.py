@@ -1,4 +1,4 @@
-# Boilerplate coin path. The skipped swap suite still names it.
+# Old boilerplate path. The unhooked swap suite still imports this name.
 BOL_PATH = "m/44'/1'/0'/0/0"
 
 # Paths the Warthog app accepts.

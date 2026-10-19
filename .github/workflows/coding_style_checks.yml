@@ -1,10 +1,11 @@
-name: Run coding style check through reusable workflow
+name: Run coding style check
 
-# This workflow will run linting checks to ensure a level of uniformization among all Ledger applications.
+# This workflow will run linting checks to ensure a level of code quality among all Ledger applications.
 #
 # The presence of this workflow is mandatory as a minimal level of linting is required.
-# You are however free to modify the content of the .clang-format file and thus the coding style of your application.
-# We simply ask you to not diverge too much from the linting of the Boilerplate application.
+
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:

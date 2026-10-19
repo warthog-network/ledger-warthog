@@ -54,6 +54,8 @@ GET_PUBLIC_KEY returns `pubkey_len` (1, value 65), the 65-byte uncompressed key,
 
 SIGN_TX returns 65 bytes: `r` (32) || `s` (32) || `recid` (1). `s` is in the low
 half of the secp256k1 order. The signed message is one SHA-256 of the 79-byte body.
+This Rust build's `deterministic_sign` reports Y parity only, so `recid` bit 1
+(`r.x > n`) stays clear.
 
 ## Status words
 

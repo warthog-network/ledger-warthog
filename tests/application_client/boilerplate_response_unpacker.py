@@ -59,7 +59,6 @@ def unpack_get_public_key_response(response: bytes) -> tuple[int, bytes, int, by
     assert pub_key_len == 65
     assert chain_code_len == 32
     assert len(response) == 0
-
     return pub_key_len, pub_key, chain_code_len, chain_code
 
 
