@@ -38,6 +38,7 @@ APP_SOURCE_PATH += src
 
 # Application icons following guidelines:
 # https://developers.ledger.com/docs/embedded-app/design-requirements/#device-icon
+ICON_NANOS = icons/app_boilerplate_16px.gif
 ICON_NANOX = icons/app_boilerplate_14px.gif
 ICON_NANOSP = icons/app_boilerplate_14px.gif
 ICON_STAX = icons/app_boilerplate_32px.gif
@@ -132,9 +133,9 @@ endif
 ########################################
 #          TLV & PKI features          #
 ########################################
-# Both are used in the Dynamic Token example
-ENABLE_TLV_LIBRARY = 1
-ENABLE_PKI_LIBRARY = 1
+# Warthog has no CAL token descriptor. Leave both off.
+# ENABLE_TLV_LIBRARY = 1
+# ENABLE_PKI_LIBRARY = 1
 
 ########################################
 #        Stack protection features     #
@@ -154,5 +155,11 @@ ENABLE_STACK_PROTECTOR = 1
 #DISABLE_STANDARD_WEBUSB = 1
 #DISABLE_DEBUG_LEDGER_ASSERT = 1
 #DISABLE_DEBUG_THROW = 1
+
+# The Nano S glyph script does not add ICONNAME. The in-app icon still needs
+# that glyph, or the NBGL screens have no symbol for it.
+ifeq ($(TARGET_NAME),TARGET_NANOS)
+GLYPH_FILES += $(ICON_NANOS)
+endif
 
 include $(BOLOS_SDK)/Makefile.standard_app

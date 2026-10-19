@@ -1,3 +1,5 @@
+> The live Warthog commands are in [docs/apdu.md](../docs/apdu.md). This file describes the APDU framing only.
+
 # Application Protocol Data Unit (APDU)
 
 The communication protocol used by [BOLOS](https://ledger.readthedocs.io/en/latest/bolos/overview.html)

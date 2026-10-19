@@ -8,6 +8,10 @@ from application_client.boilerplate_command_sender import (
     BoilerplateCommandSender,
     Errors,
 )
+from application_client.boilerplate_currency_utils import (
+    WART_PATH,
+    WART_PATH_PLAIN_ACCOUNT,
+)
 from application_client.boilerplate_response_unpacker import (
     unpack_get_public_key_response,
 )
@@ -16,11 +20,8 @@ from application_client.boilerplate_response_unpacker import (
 # In this test we check that the GET_PUBLIC_KEY works in non-confirmation mode
 def test_get_public_key_no_confirm(backend: BackendInterface) -> None:
     path_list = [
-        "m/44'/1'/0'/0/0",
-        "m/44'/1'/0/0/0",
-        "m/44'/1'/911'/0/0",
-        "m/44'/1'/255/255/255",
-        "m/44'/1'/2147483647/0/0/0/0/0/0/0",
+        WART_PATH,
+        WART_PATH_PLAIN_ACCOUNT,
     ]
     for path in path_list:
         client = BoilerplateCommandSender(backend)
@@ -35,7 +36,7 @@ def test_get_public_key_no_confirm(backend: BackendInterface) -> None:
 # In this test we check that the GET_PUBLIC_KEY works in confirmation mode
 def test_get_public_key_confirm_accepted(backend: BackendInterface, scenario_navigator: NavigateWithScenario) -> None:
     client = BoilerplateCommandSender(backend)
-    path = "m/44'/1'/0'/0/0"
+    path = WART_PATH
     with client.get_public_key_with_confirmation(path=path):
         scenario_navigator.address_review_approve()
 
@@ -50,7 +51,7 @@ def test_get_public_key_confirm_accepted(backend: BackendInterface, scenario_nav
 # In this test we check that the GET_PUBLIC_KEY in confirmation mode replies an error if the user refuses
 def test_get_public_key_confirm_refused(backend: BackendInterface, scenario_navigator: NavigateWithScenario) -> None:
     client = BoilerplateCommandSender(backend)
-    path = "m/44'/1'/0'/0/0"
+    path = WART_PATH
 
     with pytest.raises(ExceptionRAPDU) as e:
         with client.get_public_key_with_confirmation(path=path):
@@ -58,4 +59,15 @@ def test_get_public_key_confirm_refused(backend: BackendInterface, scenario_navi
 
     # Assert that we have received a refusal
     assert e.value.status == Errors.SWO_CONDITIONS_NOT_SATISFIED
+    assert len(e.value.data) == 0
+
+
+# A path outside the two accepted Warthog shapes is refused before any screen.
+def test_get_public_key_unexpected_path(backend: BackendInterface) -> None:
+    client = BoilerplateCommandSender(backend)
+
+    with pytest.raises(ExceptionRAPDU) as e:
+        client.get_public_key(path="m/44'/1'/0'/0/0")
+
+    assert e.value.status == Errors.SWO_INCORRECT_DATA
     assert len(e.value.data) == 0

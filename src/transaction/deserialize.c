@@ -27,14 +27,12 @@
 #include "ledger_assert.h"
 #endif
 
-parser_status_e transaction_deserialize(buffer_t *buf,
-                                        transaction_t *tx,
-                                        bool is_token_transaction) {
+parser_status_e transaction_deserialize(buffer_t *buf, transaction_t *tx) {
     LEDGER_ASSERT(buf != NULL, "NULL buf");
     LEDGER_ASSERT(tx != NULL, "NULL tx");
 
     /* pinHash(32) || pinHeight(4) || nonceId(4) || pad(3) || fee(8) || to(20) || amount(8) */
-    if (is_token_transaction || buf->size != 79) {
+    if (buf->size != 79) {
         PRINTF("WRONG_LENGTH_ERROR\n");
         return WRONG_LENGTH_ERROR;
     }

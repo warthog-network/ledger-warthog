@@ -1,4 +1,13 @@
+# mypy: ignore-errors
+# pylint: skip-file
+# ruff: noqa
 import pytest
+
+pytest.skip(
+    "Warthog signs native transfers only. Swap and token flows are not part of this app.",
+    allow_module_level=True,
+)
+
 from ledger_app_clients.exchange.test_runner import (
     ALL_TESTS_EXCEPT_MEMO_THORSWAP_AND_FEES,
     ExchangeTestRunner,

@@ -1,3 +1,6 @@
+Warthog signs native transfers only. This suite is skipped, and it is not part of CI.
+The files below are the boilerplate Exchange tests this tree was forked with.
+
 ### The Swap functional tests setup
 
 The swap test suite validates the application when it is used by the Exchange application

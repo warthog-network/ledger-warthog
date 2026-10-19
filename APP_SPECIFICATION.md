@@ -1,5 +1,7 @@
 # Technical Specification
 
+> The live Warthog interface is [docs/apdu.md](docs/apdu.md). The text below is the boilerplate template this file was forked from.
+
 > **Warning**
 This documentation is a template and shall be updated with your own APDUs.
 

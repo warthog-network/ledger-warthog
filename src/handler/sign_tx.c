@@ -35,9 +35,7 @@
 #include "handle_swap.h"
 #include "validate.h"
 #include "address.h"
-#include "token_db.h"
 #include "swap_error_code_helpers.h"
-#include "dynamic_token_info.h"
 
 // This is a smart documentation inclusion. The full documentation is available at
 // https://ledgerhq.github.io/app-exchange/
@@ -75,7 +73,7 @@ static int check_and_sign_swap_tx(transaction_ctx_t *tx_ctx) {
  * Initialize transaction context for chunk 0
  *
  * @param[in] cdata Buffer containing BIP32 path
- * @param[in] req_type Request type (CONFIRM_TRANSACTION or CONFIRM_TOKEN_TRANSACTION)
+ * @param[in] req_type Request type (CONFIRM_TRANSACTION)
  * @return SWO_SUCCESS on success, error code otherwise
  */
 static int init_transaction_context(buffer_t *cdata, uint8_t req_type) {
@@ -116,31 +114,17 @@ static uint16_t accumulate_transaction_data(buffer_t *cdata, uint8_t req_type) {
     return SWO_SUCCESS;
 }
 
-static uint16_t process_transaction(bool is_token_tx) {
+static uint16_t process_transaction(void) {
     // last APDU for this transaction, let's parse, display and request a sign confirmation
     buffer_t buf = {.ptr = G_context.tx_info.raw_tx,
                     .size = G_context.tx_info.raw_tx_len,
                     .offset = 0};
 
-    G_context.tx_info.is_token_tx = is_token_tx;
-    parser_status_e status =
-        transaction_deserialize(&buf, &G_context.tx_info.transaction, is_token_tx);
+    G_context.tx_info.is_token_tx = false;
+    parser_status_e status = transaction_deserialize(&buf, &G_context.tx_info.transaction);
     PRINTF("Parsing status: %d.\n", status);
     if (status != PARSING_OK) {
         return SWO_INCORRECT_DATA;
-    }
-
-    if (is_token_tx) {
-        // Look up token information from database
-        if (!get_token_info(G_context.tx_info.transaction.token_address,
-                            &G_context.tx_info.token_info)) {
-            PRINTF("Token not found in database\n");
-            return SWO_INCORRECT_DATA;
-        }
-
-        PRINTF("Token found: %s (decimals: %d)\n",
-               G_context.tx_info.token_info.ticker,
-               G_context.tx_info.token_info.decimals);
     }
 
     cx_sha256_t hash_ctx;
@@ -180,8 +164,8 @@ static uint16_t process_transaction(bool is_token_tx) {
     return SWO_SUCCESS;
 }
 
-int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more, bool is_token_tx) {
-    uint8_t req_type = is_token_tx ? CONFIRM_TOKEN_TRANSACTION : CONFIRM_TRANSACTION;
+int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more) {
+    uint8_t req_type = CONFIRM_TRANSACTION;
     if (chunk == 0) {
         // first APDU, parse BIP32 path and return
         return init_transaction_context(cdata, req_type);
@@ -198,7 +182,7 @@ int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more, bool is_token_tx)
 
         } else {
             // last APDU for this transaction, let's parse, display and request a sign confirmation
-            err = process_transaction(is_token_tx);
+            err = process_transaction();
             if (err != SWO_SUCCESS) {
 #ifdef HAVE_SWAP
                 if (G_called_from_swap) {
@@ -223,14 +207,7 @@ int handler_sign_tx(buffer_t *cdata, uint8_t chunk, bool more, bool is_token_tx)
             }
 #endif  // HAVE_SWAP
 
-            // Example to trig a blind-sign flow
-            if (strcmp((char *) G_context.tx_info.transaction.memo, "Blind-sign") == 0) {
-                return ui_display_blind_signed_transaction();
-            } else if (is_token_tx) {
-                return ui_display_token_transaction();
-            } else {
-                return ui_display_transaction();
-            }
+            return ui_display_transaction();
         }
     }
     return 0;

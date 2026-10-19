@@ -6,9 +6,6 @@ from ragger.backend.interface import RAPDU, BackendInterface
 from ragger.bip import pack_derivation_path
 from ragger.error import StatusWords
 
-from .signing_partners import DYNAMIC_TOKEN_PARTNER
-from .tlv import format_tlv
-
 MAX_APDU_LEN: int = 255
 
 CLA: int = 0xE0
@@ -35,8 +32,6 @@ class InsType(IntEnum):
     GET_APP_NAME = 0x04
     GET_PUBLIC_KEY = 0x05
     SIGN_TX = 0x06
-    SIGN_TOKEN_TX = 0x07
-    PROVIDE_TOKEN_INFO = 0x22
 
 
 # Custom error codes specific to Boilerplate app
@@ -95,7 +90,7 @@ class BoilerplateCommandSender:
 
     @contextmanager
     def _sign_transaction(self, ins: InsType, path: str, transaction: bytes) -> Generator[None, None, None]:
-        """Generic transaction signing handler (for SIGN_TX and SIGN_TOKEN_TX)."""
+        """Send a chunked SIGN_TX. The first APDU is the path. The rest is the body."""
         self.backend.exchange(
             cla=CLA,
             ins=ins,
@@ -113,72 +108,17 @@ class BoilerplateCommandSender:
         with self.backend.exchange_async(cla=CLA, ins=ins, p1=idx, p2=P2.P2_LAST, data=messages[-1]) as response:
             yield response
 
-    # sign_tx and sign_token_tx are async functions that send the transaction to the device
-    # Both functions yield in order to allow the caller to call the navigation functions
     @contextmanager
     def sign_tx(self, path: str, transaction: bytes) -> Generator[None, None, None]:
         with self._sign_transaction(InsType.SIGN_TX, path, transaction) as response:
             yield response
 
-    @contextmanager
-    def sign_token_tx(self, path: str, transaction: bytes) -> Generator[None, None, None]:
-        with self._sign_transaction(InsType.SIGN_TOKEN_TX, path, transaction) as response:
-            yield response
-
-    # Retrieve the last asynchronous response from the backend
     def get_async_response(self) -> RAPDU | None:
         return self.backend.last_async_response
 
-    # Synchronous versions of sign_tx and sign_token_tx
-    # These functions wait for the response after sending the transaction. They are particularly
-    # useful for tests that do not require user interaction (e.g., when the transaction as already
-    # been approved in the SWAP flow)
     def sign_tx_sync(self, path: str, transaction: bytes) -> RAPDU | None:
         with self.sign_tx(path, transaction):
             pass
         rapdu = self.get_async_response()
         assert isinstance(rapdu, RAPDU)
         return rapdu
-
-    def sign_token_tx_sync(self, path: str, transaction: bytes) -> RAPDU | None:
-        with self.sign_token_tx(path, transaction):
-            pass
-        rapdu = self.get_async_response()
-        assert isinstance(rapdu, RAPDU)
-        return rapdu
-
-    def provide_dynamic_token(self, ticker: str, decimals: int, token_address: bytes, chain_id: int = 0x8001) -> RAPDU:
-        """
-        Provide a dynamic token descriptor signed with CAL test key.
-
-        Args:
-            ticker: Token ticker symbol (e.g., "USDC", "WETH")
-            decimals: Number of decimal places (e.g., 6 for USDC, 18 for WETH)
-            token_address: 32-byte token address for TUID
-            chain_id: SLIP-44 coin type (default 0x8001 for boilerplate test coin)
-
-        Returns:
-            RAPDU response from the device
-        """
-        assert len(token_address) == 32, f"Token address must be 32 bytes, got {len(token_address)}"
-
-        # Build TUID sub-TLV: tag 0x10 with 32-byte address (Boilerplate specific example)
-        tuid = format_tlv(0x10, token_address)
-
-        # Build payload WITHOUT signature for now
-        payload = format_tlv(0x01, 0x90)  # STRUCTURE_TYPE: DYNAMIC_TOKEN
-        payload += format_tlv(0x02, 0x01)  # VERSION: 1
-        payload += format_tlv(0x03, chain_id)  # COIN_TYPE
-        payload += format_tlv(0x04, "Boilerplate")  # APP: application name
-        payload += format_tlv(0x05, ticker)  # TICKER
-        payload += format_tlv(0x06, decimals)  # MAGNITUDE (decimals)
-        payload += format_tlv(0x07, tuid)  # TUID
-
-        # Sign the crafted payload and append the signature to it
-        payload += format_tlv(0x08, DYNAMIC_TOKEN_PARTNER.sign(payload))  # SIGNATURE
-
-        # Before sending the mock CAL descriptor, we need to onboard our mock CAL using a PKI certificate
-        self.backend.exchange_raw(DYNAMIC_TOKEN_PARTNER.get_certificate_payload(self.backend.device.type))
-
-        # Send APDU with P1=0, P2=0 (no chunking for token descriptors)
-        return self.backend.exchange(cla=CLA, ins=InsType.PROVIDE_TOKEN_INFO, p1=0x00, p2=0x00, data=payload)

@@ -1,14 +1,13 @@
 /*
- * Unit tests for src/handler/sign_tx.c (HAVE_SWAP build).
+ * Unit tests for src/handler/sign_tx.c.
  *
- * handler_sign_tx() accumulates APDU chunks then parses, hashes and routes the
- * transaction to the right review screen (or to the swap bypass). Every
- * dependency is a CMock mock (set up as a _Stub driven by control globals):
+ * handler_sign_tx() accumulates APDU chunks, parses a native WART transfer,
+ * hashes it, and opens the review screen. The Warthog build does not define
+ * HAVE_SWAP, so the swap bypass in that file is not part of this binary.
+ * Dependencies are CMock mocks or hand stubs:
  *   buffer (read_u8 / read_bip32_path / move), io_send_response_buffers,
- *   transaction_deserialize, get_token_info, cx_sha256_init_no_throw / cx_hash_no_throw,
- *   validate_transaction, ui_display_{transaction,blind_signed,token},
- *   swap_check_validity, send_swap_error_simple, os_sched_exit.
- * The noreturn exits (send_swap_error_simple / os_sched_exit) longjmp back.
+ *   transaction_deserialize, cx_sha256_init_no_throw / cx_hash_no_throw,
+ *   bip32_derive_with_seed_get_pubkey_256, ui_display_transaction.
  */
 
 #include <stdint.h>
@@ -31,9 +30,6 @@
 #include "sign_tx.h"
 #include "address.h"
 #include "crypto_helpers.h"
-#include "dynamic_token_info.h"  // get_token_info (CMock can't mock this header:
-                                 // set_token_info has a char(*)[N] param it
-                                 // fails to parse -> hand-stub get_token_info)
 #include "globals.h"
 #include "types.h"
 #include "sw.h"
@@ -46,7 +42,6 @@ volatile bool G_swap_response_ready;
 static bool g_read_u8_ret, g_read_path_ret, g_buffer_move_ret;
 static parser_status_e g_deser_status;
 static const char *g_deser_memo;
-static bool g_get_token_info_ret;
 static cx_err_t g_keccak_ret;
 static cx_err_t g_derive_ret;
 static bool g_path_ok;
@@ -55,7 +50,7 @@ static bool g_swap_check_ret;
 static uint16_t g_last_sw;
 static bool g_validate_called, g_validate_choice;
 static bool g_swap_error_called;
-static enum { DISP_NONE, DISP_STD, DISP_BLIND, DISP_TOKEN } g_display;
+static enum { DISP_NONE, DISP_STD } g_display;
 
 static jmp_buf g_exit_jmp;
 
@@ -80,16 +75,12 @@ static bool buffer_move_cb(buffer_t *b, uint8_t *o, size_t l, int n) {
     (void) b; (void) o; (void) l; (void) n;
     return g_buffer_move_ret;
 }
-static parser_status_e deser_cb(buffer_t *b, transaction_t *tx, bool is_token, int n) {
-    (void) b; (void) is_token; (void) n;
+static parser_status_e deser_cb(buffer_t *b, transaction_t *tx, int n) {
+    (void) b; (void) n;
     tx->memo = (uint8_t *) g_deser_memo;
+    tx->memo_len = 0;
+    tx->token_address = NULL;
     return g_deser_status;
-}
-// Hand-stub (dynamic_token_info.h is not CMock-mockable).
-bool get_token_info(const uint8_t *token_address, token_info_t *token_info) {
-    (void) token_address;
-    (void) token_info;
-    return g_get_token_info_ret;
 }
 static cx_err_t keccak_cb(const cx_iovec_t *iv, size_t len, uint8_t *digest, int n) {
     (void) iv; (void) len; (void) digest; (void) n;
@@ -168,8 +159,6 @@ static int io_send_cb(const buffer_t *r, size_t c, uint16_t sw, int n) {
     return (int) sw;
 }
 static int disp_std_cb(int n) { (void) n; g_display = DISP_STD; return 0; }
-static int disp_blind_cb(int n) { (void) n; g_display = DISP_BLIND; return 0; }
-static int disp_token_cb(int n) { (void) n; g_display = DISP_TOKEN; return 0; }
 
 static void swap_error_cb(uint16_t sw, uint8_t c, uint8_t a, int n) {
     (void) sw; (void) c; (void) a; (void) n;
@@ -206,8 +195,6 @@ void setUp(void) {
     swap_check_validity_Stub(swap_check_cb);
     io_send_response_buffers_Stub(io_send_cb);
     ui_display_transaction_Stub(disp_std_cb);
-    ui_display_blind_signed_transaction_Stub(disp_blind_cb);
-    ui_display_token_transaction_Stub(disp_token_cb);
     send_swap_error_simple_Stub(swap_error_cb);
     os_sched_exit_Stub(sched_exit_cb);
 
@@ -220,7 +207,6 @@ void setUp(void) {
     g_buffer_move_ret = true;
     g_deser_status = PARSING_OK;
     g_deser_memo = "hello";
-    g_get_token_info_ret = true;
     g_keccak_ret = CX_OK;
     g_derive_ret = CX_OK;
     g_path_ok = true;
@@ -268,25 +254,25 @@ static buffer_t make_cdata(void) {
 
 void test_chunk0_success(void) {
     buffer_t cdata = make_cdata();
-    TEST_ASSERT_EQUAL(SWO_SUCCESS, handler_sign_tx(&cdata, 0, true, false));
+    TEST_ASSERT_EQUAL(SWO_SUCCESS, handler_sign_tx(&cdata, 0, true));
 }
 
 void test_chunk0_bad_path_len(void) {
     buffer_t cdata = make_cdata();
     g_read_u8_ret = false;
-    TEST_ASSERT_EQUAL(SWO_WRONG_DATA_LENGTH, handler_sign_tx(&cdata, 0, true, false));
+    TEST_ASSERT_EQUAL(SWO_WRONG_DATA_LENGTH, handler_sign_tx(&cdata, 0, true));
 }
 
 void test_chunk0_bad_path(void) {
     buffer_t cdata = make_cdata();
     g_read_path_ret = false;
-    TEST_ASSERT_EQUAL(SWO_WRONG_DATA_LENGTH, handler_sign_tx(&cdata, 0, true, false));
+    TEST_ASSERT_EQUAL(SWO_WRONG_DATA_LENGTH, handler_sign_tx(&cdata, 0, true));
 }
 
 void test_chunk0_unexpected_path(void) {
     buffer_t cdata = make_cdata();
     g_path_ok = false;
-    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 0, true, false));
+    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 0, true));
 }
 
 // =========================================================================
@@ -296,27 +282,27 @@ void test_chunk0_unexpected_path(void) {
 void test_accumulate_wrong_req_type(void) {
     buffer_t cdata = make_cdata();
     G_context.req_type = CONFIRM_ADDRESS;  // expected CONFIRM_TRANSACTION
-    TEST_ASSERT_EQUAL(SWO_CONDITIONS_NOT_SATISFIED, handler_sign_tx(&cdata, 1, true, false));
+    TEST_ASSERT_EQUAL(SWO_CONDITIONS_NOT_SATISFIED, handler_sign_tx(&cdata, 1, true));
 }
 
 void test_accumulate_overflow(void) {
     buffer_t cdata = make_cdata();
     G_context.req_type = CONFIRM_TRANSACTION;
     G_context.tx_info.raw_tx_len = sizeof(G_context.tx_info.raw_tx);  // no room left
-    TEST_ASSERT_EQUAL(SWO_WRONG_DATA_LENGTH, handler_sign_tx(&cdata, 1, true, false));
+    TEST_ASSERT_EQUAL(SWO_WRONG_DATA_LENGTH, handler_sign_tx(&cdata, 1, true));
 }
 
 void test_accumulate_buffer_move_failure(void) {
     buffer_t cdata = make_cdata();
     G_context.req_type = CONFIRM_TRANSACTION;
     g_buffer_move_ret = false;
-    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, true, false));
+    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, true));
 }
 
 void test_accumulate_more_chunks(void) {
     buffer_t cdata = make_cdata();
     G_context.req_type = CONFIRM_TRANSACTION;
-    TEST_ASSERT_EQUAL(SWO_SUCCESS, handler_sign_tx(&cdata, 1, true, false));  // more = true
+    TEST_ASSERT_EQUAL(SWO_SUCCESS, handler_sign_tx(&cdata, 1, true));  // more = true
 }
 
 // =========================================================================
@@ -327,28 +313,21 @@ void test_process_deserialize_failure(void) {
     buffer_t cdata = make_cdata();
     G_context.req_type = CONFIRM_TRANSACTION;
     g_deser_status = WRONG_LENGTH_ERROR;
-    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, false, false));
-}
-
-void test_process_token_not_found(void) {
-    buffer_t cdata = make_cdata();
-    G_context.req_type = CONFIRM_TOKEN_TRANSACTION;
-    g_get_token_info_ret = false;
-    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, false, true));
+    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, false));
 }
 
 void test_process_hash_failure(void) {
     buffer_t cdata = make_cdata();
     G_context.req_type = CONFIRM_TRANSACTION;
     g_keccak_ret = (cx_err_t) 1;  // != CX_OK
-    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, false, false));
+    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, false));
 }
 
 void test_process_derive_failure(void) {
     buffer_t cdata = make_cdata();
     G_context.req_type = CONFIRM_TRANSACTION;
     g_derive_ret = (cx_err_t) 1;
-    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, false, false));
+    TEST_ASSERT_EQUAL(SWO_INCORRECT_DATA, handler_sign_tx(&cdata, 1, false));
 }
 
 // =========================================================================
@@ -359,69 +338,8 @@ void test_display_standard(void) {
     buffer_t cdata = make_cdata();
     G_context.req_type = CONFIRM_TRANSACTION;
     g_deser_memo = "hello";
-    handler_sign_tx(&cdata, 1, false, false);
+    handler_sign_tx(&cdata, 1, false);
     TEST_ASSERT_EQUAL(DISP_STD, g_display);
-}
-
-void test_display_blind_sign(void) {
-    buffer_t cdata = make_cdata();
-    G_context.req_type = CONFIRM_TRANSACTION;
-    g_deser_memo = "Blind-sign";
-    handler_sign_tx(&cdata, 1, false, false);
-    TEST_ASSERT_EQUAL(DISP_BLIND, g_display);
-}
-
-void test_display_token(void) {
-    buffer_t cdata = make_cdata();
-    G_context.req_type = CONFIRM_TOKEN_TRANSACTION;
-    g_deser_memo = "hello";
-    handler_sign_tx(&cdata, 1, false, true);
-    TEST_ASSERT_EQUAL(DISP_TOKEN, g_display);
-}
-
-// =========================================================================
-// swap context
-// =========================================================================
-
-void test_swap_process_error_sends_swap_error(void) {
-    buffer_t cdata = make_cdata();
-    G_context.req_type = CONFIRM_TRANSACTION;
-    G_called_from_swap = true;
-    g_deser_status = WRONG_LENGTH_ERROR;  // process fails
-
-    if (setjmp(g_exit_jmp) == 0) {
-        handler_sign_tx(&cdata, 1, false, false);
-        TEST_FAIL_MESSAGE("expected send_swap_error_simple exit");
-    }
-    TEST_ASSERT_TRUE(g_swap_error_called);
-}
-
-void test_swap_valid_signs_and_exits(void) {
-    buffer_t cdata = make_cdata();
-    G_context.req_type = CONFIRM_TRANSACTION;
-    G_called_from_swap = true;
-    G_swap_response_ready = false;
-    g_swap_check_ret = true;
-    g_sched_exit_longjmp = false;  // let os_sched_exit return (cover trailing return 0)
-
-    int ret = handler_sign_tx(&cdata, 1, false, false);
-
-    TEST_ASSERT_TRUE(g_validate_called);
-    TEST_ASSERT_TRUE(g_validate_choice);
-    TEST_ASSERT_EQUAL(0, ret);
-}
-
-void test_swap_double_sign_guard(void) {
-    buffer_t cdata = make_cdata();
-    G_context.req_type = CONFIRM_TRANSACTION;
-    G_called_from_swap = true;
-    G_swap_response_ready = true;  // already signed once -> safety exit
-
-    if (setjmp(g_exit_jmp) == 0) {
-        handler_sign_tx(&cdata, 1, false, false);
-        TEST_FAIL_MESSAGE("expected os_sched_exit on double-sign guard");
-    }
-    TEST_ASSERT_FALSE(g_validate_called);  // never reached signing
 }
 
 int main(void) {
@@ -438,17 +356,10 @@ int main(void) {
     RUN_TEST(test_accumulate_more_chunks);
 
     RUN_TEST(test_process_deserialize_failure);
-    RUN_TEST(test_process_token_not_found);
     RUN_TEST(test_process_hash_failure);
     RUN_TEST(test_process_derive_failure);
 
     RUN_TEST(test_display_standard);
-    RUN_TEST(test_display_blind_sign);
-    RUN_TEST(test_display_token);
-
-    RUN_TEST(test_swap_process_error_sends_swap_error);
-    RUN_TEST(test_swap_valid_signs_and_exits);
-    RUN_TEST(test_swap_double_sign_guard);
 
     return UNITY_END();
 }

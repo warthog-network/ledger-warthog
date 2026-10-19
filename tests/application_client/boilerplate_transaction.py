@@ -1,13 +1,6 @@
-from io import BytesIO
+from .boilerplate_utils import UINT64_MAX, parse_hex_address
 
-from .boilerplate_utils import (
-    UINT64_MAX,
-    parse_hex_address,
-    read,
-    read_uint,
-    read_varint,
-    write_varint,
-)
+UINT32_MAX = 0xFFFFFFFF
 
 
 class TransactionError(Exception):
@@ -15,93 +8,56 @@ class TransactionError(Exception):
 
 
 class Transaction:
-    def __init__(self, nonce: int, to: str | bytes, value: int, memo: str) -> None:
-        self.nonce: int = nonce
-        self.to: bytes = parse_hex_address(to)
-        self.value: int = value
-        self.memo: bytes = memo.encode("ascii")
+    """Native WART transfer.
 
-        if not 0 <= self.nonce <= UINT64_MAX:
-            raise TransactionError(f"Bad nonce: '{self.nonce}'!")
+    The serialized body is 79 bytes, big-endian:
 
-        if not 0 <= self.value <= UINT64_MAX:
-            raise TransactionError(f"Bad value: '{self.value}'!")
+    pin_hash(32) || pin_height(4) || nonce(4) || 3 zero bytes || fee(8) || to(20) || amount(8)
+    """
 
-        if len(self.to) != 20:
-            raise TransactionError(f"Bad address: '{self.to.hex()}'!")
-
-    def serialize(self) -> bytes:
-        return b"".join(
-            [
-                self.nonce.to_bytes(8, byteorder="big"),
-                self.to,
-                self.value.to_bytes(8, byteorder="big"),
-                write_varint(len(self.memo)),
-                self.memo,
-            ]
-        )
-
-    @classmethod
-    def from_bytes(cls, hexa: bytes | BytesIO):
-        buf: BytesIO = BytesIO(hexa) if isinstance(hexa, bytes) else hexa
-
-        nonce: int = read_uint(buf, 64, byteorder="big")
-        to: bytes = read(buf, 20)
-        value: int = read_uint(buf, 64, byteorder="big")
-        memo_len: int = read_varint(buf)
-        memo: str = read(buf, memo_len).decode("ascii")
-
-        return cls(nonce=nonce, to=to, value=value, memo=memo)
-
-
-class TokenTransaction:
     def __init__(
         self,
+        pin_hash: bytes,
+        pin_height: int,
         nonce: int,
+        fee: int,
         to: str | bytes,
-        token_address: str | bytes,
-        value: int,
-        memo: str,
+        amount: int,
     ) -> None:
-        self.nonce: int = nonce
-        self.to: bytes = parse_hex_address(to)
-        self.token_address: bytes = parse_hex_address(token_address)
-        self.value: int = value
-        self.memo: bytes = memo.encode("ascii")
+        self.pin_hash = pin_hash
+        self.pin_height = pin_height
+        self.nonce = nonce
+        self.fee = fee
+        self.to = parse_hex_address(to)
+        self.amount = amount
 
-        if not 0 <= self.nonce <= UINT64_MAX:
+        if len(self.pin_hash) != 32:
+            raise TransactionError(f"Bad pin hash length: '{len(self.pin_hash)}'!")
+
+        if not 0 <= self.pin_height <= UINT32_MAX:
+            raise TransactionError(f"Bad pin height: '{self.pin_height}'!")
+
+        if not 0 <= self.nonce <= UINT32_MAX:
             raise TransactionError(f"Bad nonce: '{self.nonce}'!")
 
-        if not 0 <= self.value <= UINT64_MAX:
-            raise TransactionError(f"Bad value: '{self.value}'!")
+        if not 0 <= self.fee <= UINT64_MAX:
+            raise TransactionError(f"Bad fee: '{self.fee}'!")
+
+        if not 0 <= self.amount <= UINT64_MAX:
+            raise TransactionError(f"Bad amount: '{self.amount}'!")
 
         if len(self.to) != 20:
             raise TransactionError(f"Bad address: '{self.to.hex()}'!")
 
-        if len(self.token_address) != 32:
-            raise TransactionError(f"Bad token address: '{self.token_address.hex()}'!")
-
     def serialize(self) -> bytes:
         return b"".join(
             [
-                self.nonce.to_bytes(8, byteorder="big"),
+                self.pin_hash,
+                self.pin_height.to_bytes(4, byteorder="big"),
+                self.nonce.to_bytes(4, byteorder="big"),
+                b"\x00\x00\x00",
+                self.fee.to_bytes(8, byteorder="big"),
                 self.to,
-                self.token_address,
-                self.value.to_bytes(8, byteorder="big"),
-                write_varint(len(self.memo)),
-                self.memo,
+                self.amount.to_bytes(8, byteorder="big"),
             ]
         )
-
-    @classmethod
-    def from_bytes(cls, hexa: bytes | BytesIO):
-        buf: BytesIO = BytesIO(hexa) if isinstance(hexa, bytes) else hexa
-
-        nonce: int = read_uint(buf, 64, byteorder="big")
-        to: bytes = read(buf, 20)
-        token_address: bytes = read(buf, 32)
-        value: int = read_uint(buf, 64, byteorder="big")
-        memo_len: int = read_varint(buf)
-        memo: str = read(buf, memo_len).decode("ascii")
-
-        return cls(nonce=nonce, to=to, token_address=token_address, value=value, memo=memo)

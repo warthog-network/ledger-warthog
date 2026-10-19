@@ -194,7 +194,7 @@ void test_native_round_trip(void) {
 
     transaction_t tx;
     buffer_t buf = {.ptr = raw, .size = sizeof(raw), .offset = 0};
-    TEST_ASSERT_EQUAL(PARSING_OK, transaction_deserialize(&buf, &tx, false));
+    TEST_ASSERT_EQUAL(PARSING_OK, transaction_deserialize(&buf, &tx));
     TEST_ASSERT_EQUAL(7, tx.pin_height);
     TEST_ASSERT_EQUAL(9, tx.nonce);
     TEST_ASSERT_EQUAL(100000000, tx.fee);
@@ -208,20 +208,13 @@ void test_native_round_trip(void) {
     TEST_ASSERT_EQUAL_MEMORY(raw, out, sizeof(raw));
 }
 
-void test_token_flag_rejected(void) {
-    uint8_t raw[79] = {0};
-    transaction_t tx;
-    buffer_t buf = {.ptr = raw, .size = sizeof(raw), .offset = 0};
-    TEST_ASSERT_EQUAL(WRONG_LENGTH_ERROR, transaction_deserialize(&buf, &tx, true));
-}
-
 void test_wrong_length_rejected(void) {
     uint8_t raw[80] = {0};
     transaction_t tx;
     buffer_t short_buf = {.ptr = raw, .size = 78, .offset = 0};
     buffer_t long_buf = {.ptr = raw, .size = 80, .offset = 0};
-    TEST_ASSERT_EQUAL(WRONG_LENGTH_ERROR, transaction_deserialize(&short_buf, &tx, false));
-    TEST_ASSERT_EQUAL(WRONG_LENGTH_ERROR, transaction_deserialize(&long_buf, &tx, false));
+    TEST_ASSERT_EQUAL(WRONG_LENGTH_ERROR, transaction_deserialize(&short_buf, &tx));
+    TEST_ASSERT_EQUAL(WRONG_LENGTH_ERROR, transaction_deserialize(&long_buf, &tx));
 }
 
 void test_nonzero_pad_rejected(void) {
@@ -231,7 +224,7 @@ void test_nonzero_pad_rejected(void) {
     raw[40] = 0x01;
     transaction_t tx;
     buffer_t buf = {.ptr = raw, .size = sizeof(raw), .offset = 0};
-    TEST_ASSERT_EQUAL(WRONG_LENGTH_ERROR, transaction_deserialize(&buf, &tx, false));
+    TEST_ASSERT_EQUAL(WRONG_LENGTH_ERROR, transaction_deserialize(&buf, &tx));
 }
 
 void test_serialize_missing_fields(void) {
@@ -252,7 +245,6 @@ void test_serialize_missing_fields(void) {
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_native_round_trip);
-    RUN_TEST(test_token_flag_rejected);
     RUN_TEST(test_wrong_length_rejected);
     RUN_TEST(test_nonzero_pad_rejected);
     RUN_TEST(test_serialize_missing_fields);

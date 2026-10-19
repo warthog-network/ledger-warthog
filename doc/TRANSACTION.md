@@ -1,5 +1,5 @@
-> This file describes the old boilerplate chain. The Warthog transfer this app
-> signs is the 79-byte native body in [docs/PEER_REVIEW.md](../docs/PEER_REVIEW.md).
+> This file describes the old boilerplate chain. It is not the Warthog interface.
+> The transfer this app signs is the 79-byte native body in [docs/apdu.md](../docs/apdu.md).
 
 # BOLOK Transaction Serialization
 
@@ -47,7 +47,7 @@ of the public key.
 | `r` | 32 | x-coordinate of R in ECDSA signature |
 | `s` | 32 | x-coordinate of S in ECDSA signature |
 
-**Note**: Token transactions use the SIGN_TOKEN_TX command (INS 0x07) and include a 32-byte token address.
+**Note**: The layout below is the old boilerplate token body. This app does not implement INS 0x07.
 The token must exist in the hardcoded token database or dynamically received for the transaction to be valid.
 The value is interpreted using the token's specific decimal places (12 or 14 decimals).
 

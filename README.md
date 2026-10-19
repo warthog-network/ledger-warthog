@@ -6,6 +6,13 @@
 Sideload steps, the 0.2.0 review screen, and where to leave notes:
 [docs/PEER_REVIEW.md](docs/PEER_REVIEW.md).
 
+Published install files for 0.2.0 are on the [v0.2.0 release](https://github.com/warthog-network/ledger-warthog/releases/tag/v0.2.0):
+
+- `warthog-nanosplus-0.2.0.apdu` and `.elf` — Nano S+, OS 1.7.0, USB cable, target `0x33100004`
+- `warthog-nanos-0.2.0.apdu` and `.elf` — original Nano S, OS 2.1.0, USB cable, target `0x31100004`
+
+`SHA256SUMS` on that release is the hash of those files. These builds install over a USB cable. Bluetooth models are not in this release. The APDU the wallet sends is in [docs/apdu.md](docs/apdu.md).
+
 [![Ensure compliance with Ledger guidelines](https://github.com/LedgerHQ/app-boilerplate/actions/workflows/guidelines_enforcer.yml/badge.svg)](https://github.com/LedgerHQ/app-boilerplate/actions/workflows/guidelines_enforcer.yml)
 
 [![Build and run functional tests using ragger through reusable workflow](https://github.com/LedgerHQ/app-boilerplate/actions/workflows/build_and_functional_tests.yml/badge.svg?branch=master)](https://github.com/LedgerHQ/app-boilerplate/actions/workflows/build_and_functional_tests.yml)
@@ -99,6 +106,7 @@ make DEBUG=1  # compile optionally with PRINTF
 You can choose which device to compile and load for by setting the `BOLOS_SDK` environment variable
 to the following values :
 
+* `BOLOS_SDK=$NANOS_SDK` (original Nano S)
 * `BOLOS_SDK=$NANOX_SDK`
 * `BOLOS_SDK=$NANOSP_SDK`
 * `BOLOS_SDK=$STAX_SDK`

@@ -1,16 +1,11 @@
 /*
  * Unit tests for src/ui/nbgl_display_transaction.c.
  *
- * That file exposes three entry points that all funnel through the static
- * ui_display_transaction_bs_token_choice():
- *   - ui_display_transaction()              -> clear sign  (nbgl_useCaseReview)
- *   - ui_display_blind_signed_transaction() -> blind sign  (nbgl_useCaseReviewBlindSigning)
- *   - ui_display_token_transaction()        -> token sign  (nbgl_useCaseReview, 3 pairs)
+ * ui_display_transaction() reviews a native WART transfer with nbgl_useCaseReview.
  *
  * The NBGL API and format_*() are CMock mocks; io / validation / menu are host
- * stubs. We assert the guard status words, the formatting failure paths, which
- * review use case is started (and with how many tag/value pairs), and the
- * confirm/reject callback.
+ * stubs. We assert the guard status words, the formatting failure paths, the
+ * eight review rows, and the confirm/reject callback.
  */
 
 #include <string.h>
@@ -63,7 +58,6 @@ void ui_menu_main(void) {
 static nbgl_choiceCallback_t captured_choice_cb;
 static const nbgl_contentTagValueList_t *captured_pair_list;
 static int review_calls;
-static int blind_review_calls;
 
 static void on_review(nbgl_operationType_t operationType,
                       const nbgl_contentTagValueList_t *tagValueList,
@@ -82,27 +76,6 @@ static void on_review(nbgl_operationType_t operationType,
     captured_pair_list = tagValueList;
     captured_choice_cb = choiceCallback;
     review_calls++;
-}
-
-static void on_blind_review(nbgl_operationType_t operationType,
-                            const nbgl_contentTagValueList_t *tagValueList,
-                            const nbgl_icon_details_t *icon,
-                            const char *reviewTitle,
-                            const char *reviewSubTitle,
-                            const char *finishTitle,
-                            const nbgl_tipBox_t *tipBox,
-                            nbgl_choiceCallback_t choiceCallback,
-                            int cmock_num_calls) {
-    (void) operationType;
-    (void) icon;
-    (void) reviewTitle;
-    (void) reviewSubTitle;
-    (void) finishTitle;
-    (void) tipBox;
-    (void) cmock_num_calls;
-    captured_pair_list = tagValueList;
-    captured_choice_cb = choiceCallback;
-    blind_review_calls++;
 }
 
 static nbgl_reviewStatusType_t captured_status_type;
@@ -163,7 +136,6 @@ void setUp(void) {
     captured_choice_cb = NULL;
     captured_pair_list = NULL;
     review_calls = 0;
-    blind_review_calls = 0;
     captured_status_type = (nbgl_reviewStatusType_t) 0xFF;
     captured_status_quit_cb = NULL;
 }
@@ -181,11 +153,6 @@ static void expect_native_formatting_ok(void) {
     format_fpu64_ExpectAnyArgsAndReturn(true);
     format_hex_ExpectAnyArgsAndReturn(0);
     format_hex_ExpectAnyArgsAndReturn(0);
-    format_hex_ExpectAnyArgsAndReturn(0);
-}
-
-static void expect_token_formatting_ok(void) {
-    format_fpu64_ExpectAnyArgsAndReturn(true);
     format_hex_ExpectAnyArgsAndReturn(0);
 }
 
@@ -268,7 +235,6 @@ void test_display_transaction_success_starts_review_with_eight_pairs(void) {
 
     TEST_ASSERT_EQUAL(0, ret);
     TEST_ASSERT_EQUAL(1, review_calls);
-    TEST_ASSERT_EQUAL(0, blind_review_calls);
     TEST_ASSERT_NOT_NULL(captured_pair_list);
     TEST_ASSERT_EQUAL(8, captured_pair_list->nbPairs);
     TEST_ASSERT_EQUAL_STRING("From", captured_pair_list->pairs[0].item);
@@ -280,48 +246,6 @@ void test_display_transaction_success_starts_review_with_eight_pairs(void) {
     TEST_ASSERT_EQUAL_STRING("Pin height", captured_pair_list->pairs[6].item);
     TEST_ASSERT_EQUAL_STRING("Pin hash", captured_pair_list->pairs[7].item);
     TEST_ASSERT_NOT_NULL(captured_choice_cb);
-}
-
-// =========================================================================
-// Blind-sign flow
-// =========================================================================
-
-void test_display_blind_signed_transaction_starts_blind_review(void) {
-    expect_native_formatting_ok();
-    nbgl_useCaseReviewBlindSigning_AddCallback(on_blind_review);
-    nbgl_useCaseReviewBlindSigning_ExpectAnyArgs();
-
-    int ret = ui_display_blind_signed_transaction();
-
-    TEST_ASSERT_EQUAL(0, ret);
-    TEST_ASSERT_EQUAL(1, blind_review_calls);
-    TEST_ASSERT_EQUAL(0, review_calls);
-    TEST_ASSERT_EQUAL(8, captured_pair_list->nbPairs);
-}
-
-// =========================================================================
-// Token flow
-// =========================================================================
-
-void test_display_token_transaction_wrong_req_type_conditions_not_satisfied(void) {
-    // Token flow expects CONFIRM_TOKEN_TRANSACTION; default is CONFIRM_TRANSACTION.
-    int ret = ui_display_token_transaction();
-
-    TEST_ASSERT_EQUAL_HEX16(SWO_CONDITIONS_NOT_SATISFIED, g_last_sw);
-    TEST_ASSERT_EQUAL(SWO_CONDITIONS_NOT_SATISFIED, ret);
-}
-
-void test_display_token_transaction_success_starts_review_with_three_pairs(void) {
-    G_context.req_type = CONFIRM_TOKEN_TRANSACTION;
-    expect_token_formatting_ok();
-    nbgl_useCaseReview_AddCallback(on_review);
-    nbgl_useCaseReview_ExpectAnyArgs();
-
-    int ret = ui_display_token_transaction();
-
-    TEST_ASSERT_EQUAL(0, ret);
-    TEST_ASSERT_EQUAL(1, review_calls);
-    TEST_ASSERT_EQUAL(3, captured_pair_list->nbPairs);  // Token + Amount + To
 }
 
 // =========================================================================
@@ -374,9 +298,6 @@ int main(void) {
     RUN_TEST(test_display_transaction_address_format_failure_incorrect_data);
     RUN_TEST(test_display_transaction_missing_pin_hash_incorrect_data);
     RUN_TEST(test_display_transaction_success_starts_review_with_eight_pairs);
-    RUN_TEST(test_display_blind_signed_transaction_starts_blind_review);
-    RUN_TEST(test_display_token_transaction_wrong_req_type_conditions_not_satisfied);
-    RUN_TEST(test_display_token_transaction_success_starts_review_with_three_pairs);
     RUN_TEST(test_review_choice_confirm_validates_and_shows_signed);
     RUN_TEST(test_review_choice_reject_validates_and_shows_rejected);
 

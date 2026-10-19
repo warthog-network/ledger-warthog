@@ -26,7 +26,6 @@
 #include "Mockget_app_name.h"
 #include "Mockget_public_key.h"
 #include "Mocksign_tx.h"
-#include "Mockprovide_token_info.h"
 #include "Mockledger_assert_internals.h"
 
 // Distinctive value returned by the mocked handlers (not a status word) so we
@@ -42,7 +41,6 @@ void setUp(void) {
     Mockget_app_name_Init();
     Mockget_public_key_Init();
     Mocksign_tx_Init();
-    Mockprovide_token_info_Init();
     Mockledger_assert_internals_Init();
 }
 
@@ -52,7 +50,6 @@ void tearDown(void) {
     Mockget_app_name_Verify();
     Mockget_public_key_Verify();
     Mocksign_tx_Verify();
-    Mockprovide_token_info_Verify();
     Mockledger_assert_internals_Verify();
 
     Mockio_Destroy();
@@ -60,7 +57,6 @@ void tearDown(void) {
     Mockget_app_name_Destroy();
     Mockget_public_key_Destroy();
     Mocksign_tx_Destroy();
-    Mockprovide_token_info_Destroy();
     Mockledger_assert_internals_Destroy();
 }
 
@@ -70,7 +66,6 @@ void tearDown(void) {
 static bool g_gpk_display;
 static uint8_t g_sign_chunk;
 static bool g_sign_more;
-static bool g_sign_is_token;
 
 static int gpk_cb(buffer_t *cdata, bool display, int cmock_num_calls) {
     (void) cdata;
@@ -79,12 +74,11 @@ static int gpk_cb(buffer_t *cdata, bool display, int cmock_num_calls) {
     return HANDLER_RET;
 }
 
-static int sign_cb(buffer_t *cdata, uint8_t chunk, bool more, bool is_token, int cmock_num_calls) {
+static int sign_cb(buffer_t *cdata, uint8_t chunk, bool more, int cmock_num_calls) {
     (void) cdata;
     (void) cmock_num_calls;
     g_sign_chunk = chunk;
     g_sign_more = more;
-    g_sign_is_token = is_token;
     return HANDLER_RET;
 }
 
@@ -198,14 +192,13 @@ void test_get_public_key(void) {
 void test_sign_tx(void) {
     handler_sign_tx_AddCallback(sign_cb);
 
-    // First chunk: p1 == P1_START with P2_MORE -> more = true, not a token tx.
+    // First chunk: p1 == P1_START with P2_MORE -> more = true.
     command_t first =
         {.cla = CLA, .ins = SIGN_TX, .p1 = P1_START, .p2 = P2_MORE, .lc = 4, .data = g_data};
     handler_sign_tx_ExpectAnyArgsAndReturn(HANDLER_RET);
     TEST_ASSERT_EQUAL(HANDLER_RET, apdu_dispatcher(&first));
     TEST_ASSERT_EQUAL(P1_START, g_sign_chunk);
     TEST_ASSERT_TRUE(g_sign_more);
-    TEST_ASSERT_FALSE(g_sign_is_token);
 
     // Last chunk: p1 = 1 with P2_LAST -> more = false.
     command_t last = {.cla = CLA, .ins = SIGN_TX, .p1 = 1, .p2 = P2_LAST, .lc = 4, .data = g_data};
@@ -239,43 +232,19 @@ void test_sign_tx(void) {
 }
 
 // =========================================================================
-// SIGN_TOKEN_TX (same handler as SIGN_TX, with is_token = true)
+// Retired boilerplate commands are not instructions of this app.
 // =========================================================================
 
-void test_sign_token_tx(void) {
-    handler_sign_tx_AddCallback(sign_cb);
+void test_retired_token_commands(void) {
+    command_t sign_token =
+        {.cla = CLA, .ins = 0x07, .p1 = P1_START, .p2 = P2_MORE, .lc = 4, .data = g_data};
+    EXPECT_SEND_SW(SWO_INVALID_INS);
+    TEST_ASSERT_EQUAL(SWO_INVALID_INS, apdu_dispatcher(&sign_token));
 
-    command_t token =
-        {.cla = CLA, .ins = SIGN_TOKEN_TX, .p1 = P1_START, .p2 = P2_MORE, .lc = 4, .data = g_data};
-    handler_sign_tx_ExpectAnyArgsAndReturn(HANDLER_RET);
-    TEST_ASSERT_EQUAL(HANDLER_RET, apdu_dispatcher(&token));
-    TEST_ASSERT_TRUE(g_sign_is_token);
-}
-
-// =========================================================================
-// PROVIDE_TOKEN_INFO
-// =========================================================================
-
-void test_provide_token_info(void) {
-    command_t valid =
-        {.cla = CLA, .ins = PROVIDE_TOKEN_INFO, .p1 = 0, .p2 = 0, .lc = 4, .data = g_data};
-    handler_provide_token_info_ExpectAnyArgsAndReturn(HANDLER_RET);
-    TEST_ASSERT_EQUAL(HANDLER_RET, apdu_dispatcher(&valid));
-
-    command_t bad_p1 =
-        {.cla = CLA, .ins = PROVIDE_TOKEN_INFO, .p1 = 1, .p2 = 0, .lc = 4, .data = g_data};
-    EXPECT_SEND_SW(SWO_INCORRECT_P1_P2);
-    TEST_ASSERT_EQUAL(SWO_INCORRECT_P1_P2, apdu_dispatcher(&bad_p1));
-
-    command_t bad_p2 =
-        {.cla = CLA, .ins = PROVIDE_TOKEN_INFO, .p1 = 0, .p2 = 1, .lc = 4, .data = g_data};
-    EXPECT_SEND_SW(SWO_INCORRECT_P1_P2);
-    TEST_ASSERT_EQUAL(SWO_INCORRECT_P1_P2, apdu_dispatcher(&bad_p2));
-
-    command_t no_data =
-        {.cla = CLA, .ins = PROVIDE_TOKEN_INFO, .p1 = 0, .p2 = 0, .lc = 0, .data = NULL};
-    EXPECT_SEND_SW(SWO_WRONG_DATA_LENGTH);
-    TEST_ASSERT_EQUAL(SWO_WRONG_DATA_LENGTH, apdu_dispatcher(&no_data));
+    command_t provide_token =
+        {.cla = CLA, .ins = 0x22, .p1 = 0, .p2 = 0, .lc = 4, .data = g_data};
+    EXPECT_SEND_SW(SWO_INVALID_INS);
+    TEST_ASSERT_EQUAL(SWO_INVALID_INS, apdu_dispatcher(&provide_token));
 }
 
 // =========================================================================
@@ -289,8 +258,7 @@ int main(void) {
     RUN_TEST(test_get_app_name);
     RUN_TEST(test_get_public_key);
     RUN_TEST(test_sign_tx);
-    RUN_TEST(test_sign_token_tx);
-    RUN_TEST(test_provide_token_info);
+    RUN_TEST(test_retired_token_commands);
 
     return UNITY_END();
 }

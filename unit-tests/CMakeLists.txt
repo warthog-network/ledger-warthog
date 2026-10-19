@@ -26,7 +26,6 @@ set(UT_INCLUDE_DIRS
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/handler
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/helper
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/swap
-    ${CMAKE_CURRENT_SOURCE_DIR}/../src/token
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/transaction
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/ui/action
@@ -119,7 +118,6 @@ ledger_unit_tests_add_test(
                    ${CMAKE_CURRENT_SOURCE_DIR}/../src/handler/get_app_name.h
                    ${CMAKE_CURRENT_SOURCE_DIR}/../src/handler/get_public_key.h
                    ${CMAKE_CURRENT_SOURCE_DIR}/../src/handler/sign_tx.h
-                   ${CMAKE_CURRENT_SOURCE_DIR}/../src/handler/provide_token_info.h
     INCLUDE_DIRS   ${UT_INCLUDE_DIRS_SDK} ${UT_INCLUDE_DIRS}
     COMPILE_DEFS   ${UT_COMPILE_DEFS_SDK} ${UT_COMPILE_DEFS}
 )
@@ -135,21 +133,6 @@ ledger_unit_tests_add_test(
 ledger_unit_tests_add_test(
     NAME           test_utils
     SOURCES        ${CMAKE_CURRENT_SOURCE_DIR}/../src/transaction/utils.c
-    INCLUDE_DIRS   ${UT_INCLUDE_DIRS_SDK} ${UT_INCLUDE_DIRS}
-    COMPILE_DEFS   ${UT_COMPILE_DEFS_SDK} ${UT_COMPILE_DEFS}
-)
-
-ledger_unit_tests_add_test(
-    NAME           test_dynamic_token_info
-    SOURCES        ${CMAKE_CURRENT_SOURCE_DIR}/../src/token/dynamic_token_info.c
-    MOCK_HEADERS   ${CMAKE_CURRENT_SOURCE_DIR}/../src/token/token_db.h
-    INCLUDE_DIRS   ${UT_INCLUDE_DIRS_SDK} ${UT_INCLUDE_DIRS}
-    COMPILE_DEFS   ${UT_COMPILE_DEFS_SDK} ${UT_COMPILE_DEFS}
-)
-
-ledger_unit_tests_add_test(
-    NAME           test_token_db
-    SOURCES        ${CMAKE_CURRENT_SOURCE_DIR}/../src/token/token_db.c
     INCLUDE_DIRS   ${UT_INCLUDE_DIRS_SDK} ${UT_INCLUDE_DIRS}
     COMPILE_DEFS   ${UT_COMPILE_DEFS_SDK} ${UT_COMPILE_DEFS}
 )
@@ -237,12 +220,4 @@ ledger_unit_tests_add_test(
     COMPILE_DEFS   ${UT_COMPILE_DEFS_SDK} ${UT_COMPILE_DEFS}
 )
 
-ledger_unit_tests_add_test(
-    NAME           test_provide_token_info
-    SOURCES        ${CMAKE_CURRENT_SOURCE_DIR}/../src/handler/provide_token_info.c
-    MOCK_HEADERS   ${SDK_DIR}/lib_tlv/use_cases/tlv_use_case_dynamic_descriptor.h
-                   ${SDK_DIR}/lib_tlv/tlv_library.h
-                   ${SDK_DIR}/lib_standard_app/io.h
-    INCLUDE_DIRS   ${UT_INCLUDE_DIRS_SDK} ${UT_INCLUDE_DIRS}
-    COMPILE_DEFS   ${UT_COMPILE_DEFS_SDK} ${UT_COMPILE_DEFS}
-)
+

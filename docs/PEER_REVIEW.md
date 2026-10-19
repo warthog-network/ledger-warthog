@@ -49,6 +49,12 @@ the address of the path on the seed you loaded, not the sample From.
 `python3 tools/check_wart_vectors.py --show-sign-apdu` prints the two sign
 commands and does not send them.
 
+## Original Nano S
+
+The same sources build for the original Nano S. Set `BOLOS_SDK=$NANOS_SDK`
+before `make` and `make load`. That binary is not the Nano S+ binary. A Nano S+
+build will not install on a Nano S.
+
 ## Load version 0.2.0 on a Nano S+
 
 On this laptop, a page does the same steps. From `ledger-dev`:
@@ -136,8 +142,7 @@ That command refuses every APDU except those three reads.
 - Amount and fee show 8 decimal places, not the raw E8 integer.
 - To is 48 hex characters. The first 40 are the destination. The last 8 are
   the checksum.
-- A 79-byte body round-trips. A different length, a non-zero pad, or the token
-  flag is refused.
+- A 79-byte body round-trips. A different length or a non-zero pad is refused.
 - `signature65` matches `warthog-js` `Account.sign` on the same 32-byte hash:
   low `s`, and recid bit 0 flipped when a high `s` was normalized.
 - The app does not offer swap, and it does not sign any transaction type other
